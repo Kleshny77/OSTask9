@@ -1,4 +1,3 @@
-// Include necessary headers
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
@@ -18,7 +17,6 @@ int main() {
     char link_path_next[256];
     int depth = 0;
 
-    // Create a temporary directory
     strcpy(temp_dir, TEMP_DIR_TEMPLATE);
     if (mkdtemp(temp_dir) == NULL) {
         perror("Error creating temporary directory");
@@ -26,58 +24,48 @@ int main() {
     }
     printf("Created temporary directory: %s\n", temp_dir);
 
-    // Create the base file inside the temporary directory
     snprintf(base_file_path, sizeof(base_file_path), "%s/%s", temp_dir, BASE_FILENAME);
     FILE *base_file = fopen(base_file_path, "w");
     if (base_file == NULL) {
         perror("Error creating base file");
-        rmdir(temp_dir); // Clean up the directory
+        rmdir(temp_dir);
         return EXIT_FAILURE;
     }
     fclose(base_file);
 
-    // Initial link points to the base file
     snprintf(link_path_current, sizeof(link_path_current), "%s/%s%d", temp_dir, LINK_PREFIX, depth);
     if (symlink(BASE_FILENAME, link_path_current) == -1) {
          perror("Error creating initial symlink");
-         unlink(base_file_path); // Clean up base file
-         rmdir(temp_dir); // Clean up the directory
+         unlink(base_file_path);
+         rmdir(temp_dir);
          return EXIT_FAILURE;
     }
     
-    depth = 1; // Start with depth 1 for the first link
+    depth = 1;
 
-    // Loop to create subsequent symbolic links
     while (1) {
         snprintf(link_path_next, sizeof(link_path_next), "%s/%s%d", temp_dir, LINK_PREFIX, depth);
-        // New link points to the previous link
         if (symlink(link_path_current + strlen(temp_dir) + 1, link_path_next) == -1) {
-            // If symlink creation fails, clean up the current link and break
             perror("Error creating symlink");
             break;
         }
         
-        // Attempt to open the newest link (this is the operation that hits recursion limit)
         int fd = open(link_path_next, O_RDONLY);
         if (fd == -1) {
-            // If opening fails, we hit the recursion limit
             if (errno == ELOOP) {
                 printf("Reached max symlink recursion depth.\n");
             } else {
                  perror("Error opening symlink");
             }
-            // Unlink the link that failed to open
             unlink(link_path_next);
             break;
         }
         close(fd);
 
-        // Move to the next link
         strcpy(link_path_current, link_path_next);
         depth++;
     }
 
-    // Clean up all created links and the base file
     printf("Cleaning up created files...\n");
     char cleanup_path[256];
     for (int i = 0; i < depth; ++i) {
@@ -91,12 +79,11 @@ int main() {
         perror("Error cleaning up base file");
     }
 
-    // Remove the temporary directory
     if (rmdir(temp_dir) == -1) {
         perror("Error removing temporary directory");
     }
 
-    printf("Symlink recursion depth: %d\n", depth -1); // Subtract 1 because the last link failed
+    printf("Symlink recursion depth: %d\n", depth -1);
 
     return 0;
 } 
